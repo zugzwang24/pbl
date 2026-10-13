@@ -1,0 +1,133 @@
+{
+  "warning": "Demo only: one moving-camera scene and seven usable surrounding tracks. Errors are image pixels, not world-space meters.",
+  "data": {
+    "source_video": "C:\\Users\\User\\Desktop\\그나마.mp4",
+    "video_id": "그나마",
+    "fps": 30.072439688974548,
+    "frame_width": 1280,
+    "frame_height": 720,
+    "tracks_csv": "C:\\Users\\User\\Documents\\pbl\\outputs\\tracking_custom_v1\\tracks.csv",
+    "excluded_track_id": 5,
+    "usable_track_ids": [
+      1,
+      2,
+      4,
+      6,
+      19,
+      363,
+      369
+    ],
+    "all_eligible_windows": 182,
+    "selected_windows": 143,
+    "split_windows": {
+      "train": 102,
+      "val": 21,
+      "test": 20
+    },
+    "split_track_ids": {
+      "train": [
+        1,
+        2,
+        4,
+        6,
+        19
+      ],
+      "val": [
+        363
+      ],
+      "test": [
+        369
+      ]
+    },
+    "split_time_ranges_s": {
+      "train": [
+        19.98507624309392,
+        25.98507624309392
+      ],
+      "val": [
+        26.00387624309392,
+        29.90387624309392
+      ],
+      "test": [
+        26.070382320441986,
+        29.870382320441987
+      ]
+    }
+  },
+  "preprocessing": {
+    "coordinate": "bottom_center normalized image coordinate",
+    "sample_hz": 10.0,
+    "observation_steps": 10,
+    "prediction_steps": 10,
+    "max_missing_frames_within_segment": 4,
+    "observation_resampling": "causal latest-past detection",
+    "future_label_resampling": "offline linear interpolation",
+    "feature_names": [
+      "relative_x",
+      "relative_y",
+      "velocity_x",
+      "velocity_y"
+    ]
+  },
+  "training": {
+    "seed": 42,
+    "device": "cuda",
+    "hidden_size": 32,
+    "parameter_count": 5364,
+    "epochs_run": 126,
+    "best_epoch": 6,
+    "best_validation_loss": 0.0029281407616855134
+  },
+  "test_micro": {
+    "last_position": {
+      "ade_px": 5.649172782897949,
+      "fde_px": 8.577428817749023,
+      "error_0_1s_px": 1.9389495849609375,
+      "error_0_5s_px": 5.742470741271973,
+      "error_1_0s_px": 8.577428817749023,
+      "ade_image_diagonal_fraction": 0.0038466257974505424
+    },
+    "constant_velocity": {
+      "ade_px": 9.302289962768555,
+      "fde_px": 16.777297973632812,
+      "error_0_1s_px": 2.563443660736084,
+      "error_0_5s_px": 8.599820137023926,
+      "error_1_0s_px": 16.777297973632812,
+      "ade_image_diagonal_fraction": 0.006334100384265184
+    },
+    "gru": {
+      "ade_px": 7.332029819488525,
+      "fde_px": 12.705883979797363,
+      "error_0_1s_px": 2.5148379802703857,
+      "error_0_5s_px": 6.500873565673828,
+      "error_1_0s_px": 12.705883979797363,
+      "ade_image_diagonal_fraction": 0.004992513917386532
+    }
+  },
+  "test_track_macro": {
+    "last_position": {
+      "ade_px": 5.649172782897949,
+      "fde_px": 8.577428817749023,
+      "error_0_1s_px": 1.9389495849609375,
+      "error_0_5s_px": 5.742470741271973,
+      "error_1_0s_px": 8.577428817749023,
+      "ade_image_diagonal_fraction": 0.0038466257974505424
+    },
+    "constant_velocity": {
+      "ade_px": 9.302289962768555,
+      "fde_px": 16.777297973632812,
+      "error_0_1s_px": 2.563443660736084,
+      "error_0_5s_px": 8.599820137023926,
+      "error_1_0s_px": 16.777297973632812,
+      "ade_image_diagonal_fraction": 0.006334100384265184
+    },
+    "gru": {
+      "ade_px": 7.332029819488525,
+      "fde_px": 12.705883979797363,
+      "error_0_1s_px": 2.5148379802703857,
+      "error_0_5s_px": 6.500873565673828,
+      "error_1_0s_px": 12.705883979797363,
+      "ade_image_diagonal_fraction": 0.004992513917386532
+    }
+  }
+}

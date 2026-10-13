@@ -30,6 +30,7 @@ from train_surrounding_gru import (
     metric_summary,
     pixel_errors,
     predict,
+    parse_id_set,
     read_tracks,
     sample_arrays,
     set_seed,
@@ -155,9 +156,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tracks",
         type=Path,
-        default=Path("outputs/tracking_06_17_v2/tracks.csv"),
+        default=Path("outputs/tracking_custom_v1/tracks.csv"),
     )
-    parser.add_argument("--output", type=Path, default=Path("outputs/model_benchmark"))
+    parser.add_argument(
+        "--output", type=Path, default=Path("outputs/model_benchmark_correct_v1")
+    )
+    parser.add_argument("--exclude-id", type=int, default=5)
+    parser.add_argument("--train-ids", default="1,2,4,6,19")
+    parser.add_argument("--val-ids", default="363")
+    parser.add_argument("--test-ids", default="369")
+    parser.add_argument("--sample-hz", type=float, default=10.0)
+    parser.add_argument("--obs-len", type=int, default=10)
+    parser.add_argument("--pred-len", type=int, default=10)
+    parser.add_argument("--max-gap", type=int, default=4)
     parser.add_argument("--seeds", default="7,42,123")
     parser.add_argument("--epochs", type=int, default=500)
     parser.add_argument("--patience", type=int, default=80)
@@ -434,7 +445,12 @@ def write_csv(path: Path, rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
-def plot_comparison(path: Path, summaries: list[dict]) -> None:
+def plot_comparison(
+    path: Path,
+    summaries: list[dict],
+    test_track_count: int,
+    test_window_count: int,
+) -> None:
     labels = [summary["model"] for summary in summaries]
     x_positions = np.arange(len(labels))
     figure, axes = plt.subplots(1, 2, figsize=(15, 5.5), sharey=False)
@@ -451,7 +467,8 @@ def plot_comparison(path: Path, summaries: list[dict]) -> None:
         axis.set_xticks(x_positions, labels, rotation=35, ha="right")
         axis.grid(axis="y", alpha=0.25)
     figure.suptitle(
-        "Trajectory model comparison — 3 test tracks / 9 overlapping windows\n"
+        "Trajectory model comparison — "
+        f"{test_track_count} test track(s) / {test_window_count} overlapping windows\n"
         "Neural error bars show variation across training seeds, not data uncertainty"
     )
     figure.tight_layout(rect=(0, 0, 1, 0.9))
@@ -467,23 +484,52 @@ def main() -> None:
     checkpoint_dir = output_dir / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     seeds = [int(item.strip()) for item in args.seeds.split(",") if item.strip()]
+    if not seeds:
+        raise ValueError("At least one training seed is required")
     device = torch.device(args.device)
 
-    sample_hz = 10.0
-    obs_len = 10
-    pred_len = 10
-    tracks, metadata = read_tracks(tracks_path, exclude_id=52)
-    windows = build_windows(tracks, sample_hz, obs_len, pred_len, max_gap=4)
+    train_ids = parse_id_set(args.train_ids)
+    val_ids = parse_id_set(args.val_ids)
+    test_ids = parse_id_set(args.test_ids)
+    if not train_ids or not val_ids or not test_ids:
+        raise ValueError("Train, validation, and test ID sets must all be non-empty")
+    if train_ids & val_ids or train_ids & test_ids or val_ids & test_ids:
+        raise ValueError("Train, validation, and test IDs must be disjoint")
+    if args.exclude_id in train_ids | val_ids | test_ids:
+        raise ValueError("The excluded track ID cannot appear in a data split")
+    if args.sample_hz <= 0 or args.obs_len <= 0 or args.pred_len <= 0:
+        raise ValueError("sample-hz, obs-len, and pred-len must be positive")
+    if args.max_gap < 0:
+        raise ValueError("max-gap must be non-negative")
+    if args.epochs <= 0 or args.patience <= 0 or args.batch_size <= 0:
+        raise ValueError("epochs, patience, and batch-size must be positive")
+    if args.learning_rate <= 0 or args.weight_decay < 0:
+        raise ValueError("learning-rate must be positive and weight-decay non-negative")
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available")
+
+    sample_hz = args.sample_hz
+    obs_len = args.obs_len
+    pred_len = args.pred_len
+    tracks, metadata = read_tracks(tracks_path, exclude_id=args.exclude_id)
+    windows = build_windows(
+        tracks, sample_hz, obs_len, pred_len, max_gap=args.max_gap
+    )
     selected = assign_splits(
         windows,
-        train_ids={1, 2, 4},
-        val_ids={70},
-        test_ids={292, 301, 306},
+        train_ids=train_ids,
+        val_ids=val_ids,
+        test_ids=test_ids,
     )
     split_samples = {
         split: [sample for sample in selected if sample.split == split]
         for split in ("train", "val", "test")
     }
+    if any(not samples for samples in split_samples.values()):
+        raise ValueError(
+            "Every split needs at least one window: "
+            + str({key: len(value) for key, value in split_samples.items()})
+        )
     arrays = {
         split: sample_arrays(samples, sample_hz)
         for split, samples in split_samples.items()
@@ -592,18 +638,29 @@ def main() -> None:
     model_order = [*baseline_predictions.keys(), *model_factories.keys()]
     summaries = summarize_runs(runs, model_order)
     summaries.sort(key=lambda row: float(row["macro_ade_px_mean"]))
+    test_track_count = len({sample.track_id for sample in test_samples})
+    test_window_count = len(test_samples)
     write_csv(output_dir / "benchmark_runs.csv", runs)
     write_csv(output_dir / "benchmark_summary.csv", summaries)
-    plot_comparison(output_dir / "model_comparison.png", summaries)
+    plot_comparison(
+        output_dir / "model_comparison.png",
+        summaries,
+        test_track_count,
+        test_window_count,
+    )
 
     payload = {
         "warning": (
-            "Exploratory comparison only: one moving-camera scene, 3 test tracks, "
-            "and 9 heavily overlapping test windows. Pixel errors are not meters."
+            "Exploratory comparison only: one moving-camera scene, "
+            f"{test_track_count} test track(s), and {test_window_count} heavily "
+            "overlapping test windows. Pixel errors are not meters."
         ),
         "data": {
             **metadata,
             "tracks_csv": str(tracks_path),
+            "excluded_track_id": args.exclude_id,
+            "all_eligible_windows": len(windows),
+            "selected_windows": len(selected),
             "split_windows": {
                 split: len(samples) for split, samples in split_samples.items()
             },
@@ -611,13 +668,25 @@ def main() -> None:
                 split: sorted({sample.track_id for sample in samples})
                 for split, samples in split_samples.items()
             },
+            "split_time_ranges_s": {
+                split: [
+                    min(sample.start_time for sample in samples),
+                    max(sample.end_time for sample in samples),
+                ]
+                for split, samples in split_samples.items()
+            },
             "causal_observations": True,
         },
         "training": {
             "seeds": seeds,
             "device": str(device),
+            "sample_hz": sample_hz,
+            "observation_steps": obs_len,
+            "prediction_steps": pred_len,
+            "max_gap_frames": args.max_gap,
             "epochs": args.epochs,
             "patience": args.patience,
+            "batch_size": args.batch_size,
             "learning_rate": args.learning_rate,
             "weight_decay": args.weight_decay,
             "loss": "SmoothL1 beta=0.005",

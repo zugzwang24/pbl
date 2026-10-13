@@ -1,0 +1,35 @@
+{
+  "train_ids": [
+    1,
+    2,
+    4,
+    6,
+    19
+  ],
+  "val_ids": [
+    363
+  ],
+  "test_ids": [
+    369
+  ],
+  "arguments": {
+    "tracks": "outputs\\tracking_custom_v1\\tracks.csv",
+    "output": "outputs\\surrounding_gru_correct_v1",
+    "exclude_id": 5,
+    "train_ids": "1,2,4,6,19",
+    "val_ids": "363",
+    "test_ids": "369",
+    "sample_hz": 10.0,
+    "obs_len": 10,
+    "pred_len": 10,
+    "max_gap": 4,
+    "hidden_size": 32,
+    "epochs": 800,
+    "patience": 120,
+    "batch_size": 16,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "seed": 42,
+    "device": "cuda"
+  }
+}
